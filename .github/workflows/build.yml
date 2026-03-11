@@ -1,11 +1,69 @@
-- name: Build TWRP
+name: Build TWRP for EveryPhone EP-171EN
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Environment
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y bc build-essential zip curl libstdc++6 git wget python2 python3 python-is-python2 sudo
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+
+      - name: Sync TWRP Minimal Manifest
+        run: |
+          mkdir ~/twrp
+          cd ~/twrp
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          ~/bin/repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
+          ~/bin/repo sync -c -j$(nproc) --no-tags --no-clone-bundle
+
+      - name: Force Fix Device Tree Path
+        run: |
+          # フォルダを強制作成
+          mkdir -p ~/twrp/device/everyphone/ep171en
+          
+          # リポジトリの中身を、構造を無視して全部正しい場所にコピーするぞ！
+          if [ -d "$GITHUB_WORKSPACE/device/everyphone/ep171en" ]; then
+            cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
+          else
+            # リポジトリのトップにファイルがある場合
+            cp -rv $GITHUB_WORKSPACE/* ~/twrp/device/everyphone/ep171en/
+          fi
+          
+          # 不要なファイルを掃除
+          rm -rf ~/twrp/device/everyphone/ep171en/.git
+          
+          # Pythonのエラー修正
+          sed -i 's/except IOError, ES.ParseError:/except (IOError, ES.ParseError):/g' ~/twrp/build/tools/roomservice.py
+          
+          # 確認（ここでファイル名が出てくれば勝利だ）
+          ls -R ~/twrp/device/everyphone/ep171en
+
+      - name: Build TWRP
         run: |
           cd ~/twrp
           export ALLOW_MISSING_DEPENDENCIES=true
           export LC_ALL=C
-          # roomservice（自動検索）をスキップさせる呪文だ！
+          # roomservice（外部検索）を封印して、ローカルの地図を強制的に読ませる！
           export SKIP_ROOMSERVICE=true
-          source build/envsetup.sh
-          # 直接、製品のフルパスを指定して呼び出すぞ
-          lunch omni_ep171en-eng
-          make recoveryimage -j$(nproc)
+          /bin/bash -c "source build/envsetup.sh && lunch omni_ep171en-eng && make recoveryimage -j$(nproc)"
+
+      - name: Upload Recovery Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: TWRP-Recovery-EP171EN
+          path: /home/runner/twrp/out/target/product/ep171en/recovery.img
