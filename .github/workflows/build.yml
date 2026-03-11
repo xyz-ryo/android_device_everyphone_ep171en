@@ -1,9 +1,56 @@
-- name: Add Device Tree
+name: Build TWRP for EveryPhone EP-171EN
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Environment
         run: |
-          # 確実にクリーンな状態から始める
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3
+
+      - name: Install Repo Tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
+
+      - name: Sync TWRP Minimal Manifest
+        run: |
+          mkdir ~/twrp
+          cd ~/twrp
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
+          repo sync -c -j$(nproc) --no-tags --no-clone-bundle
+
+      - name: Add Device Tree
+        run: |
           rm -rf ~/twrp/device/everyphone/ep171en
           mkdir -p ~/twrp/device/everyphone/ep171en
-          # 「/*」を付けることで、フォルダそのものではなく「中身」をコピーする
           cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
-          # 念のため、コピー後の構造をログに出力して確認するぞ！
           ls -R ~/twrp/device/everyphone/ep171en
+
+      - name: Build TWRP
+        run: |
+          cd ~/twrp
+          export ALLOW_MISSING_DEPENDENCIES=true
+          source build/envsetup.sh
+          lunch omni_ep171en-eng
+          make recoveryimage -j$(nproc)
+
+      - name: Upload Recovery Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: TWRP-Recovery-EP171EN
+          path: /home/runner/twrp/out/target/product/ep171en/recovery.img
