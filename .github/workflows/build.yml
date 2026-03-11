@@ -34,19 +34,27 @@ jobs:
           repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
           repo sync -c -j$(nproc) --no-tags --no-clone-bundle
 
-      - name: Add Device Tree
+      - name: Force Add Device Tree
         run: |
+          # フォルダ構造を根こそぎ正しく再配置するぞ、ワラケル！
           rm -rf ~/twrp/device/everyphone/ep171en
           mkdir -p ~/twrp/device/everyphone/ep171en
           cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
+          
+          # 【重要】もしファイル名が間違っていても、ここで強制的にリネームする！
+          cd ~/twrp/device/everyphone/ep171en
+          if [ -f ep171en.mk ] && [ ! -f omni_ep171en.mk ]; then mv ep171en.mk omni_ep171en.mk; fi
+          
+          # 配置をログに出して最終確認だ
           ls -R ~/twrp/device/everyphone/ep171en
 
       - name: Build TWRP
         run: |
           cd ~/twrp
           export ALLOW_MISSING_DEPENDENCIES=true
+          # ターゲットを強制的に叩き込む
           source build/envsetup.sh
-          lunch omni_ep171en-eng
+          lunch omni_ep171en-eng || (echo "FAILED TO LUNCH" && exit 1)
           make recoveryimage -j$(nproc)
 
       - name: Upload Recovery Image
