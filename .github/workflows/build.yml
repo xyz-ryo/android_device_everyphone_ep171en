@@ -1,58 +1,15 @@
-name: Build TWRP for EveryPhone EP-171EN
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Environment
+- name: Overwrite and Fix Device Tree
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y bc build-essential zip curl libstdc++6 git wget python2 python3 python-is-python2 sudo
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-
-      - name: Sync TWRP Minimal Manifest
-        run: |
-          mkdir ~/twrp
-          cd ~/twrp
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
-          ~/bin/repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
-          ~/bin/repo sync -c -j$(nproc) --no-tags --no-clone-bundle
-
-      - name: Overwrite and Fix Device Tree
-        run: |
-          # 1. フォルダを真っ新にする
           mkdir -p ~/twrp/device/everyphone/ep171en
-          rm -rf ~/twrp/device/everyphone/ep171en/*
-          
-          # 2. リポジトリのファイルをコピー
           cp -rv $GITHUB_WORKSPACE/* ~/twrp/device/everyphone/ep171en/ || true
           
-          # 3. 【重要】正しい内容でファイルを「強制上書き」するぞ！
           cd ~/twrp/device/everyphone/ep171en
-          
-          # AndroidProducts.mk の書き換え
           echo 'PRODUCT_MAKEFILES := $(LOCAL_DIR)/omni_ep171en.mk' > AndroidProducts.mk
-          
-          # vendorsetup.sh を強制作成（これが無いとlunchで見えない場合がある）
           echo 'add_lunch_combo omni_ep171en-eng' > vendorsetup.sh
           
-          # omni_ep171en.mk の中身を最小構成で強制作成
-          # ワラケル、もし元のファイルに大事な記述があっても、今はまずビルドを通すことを優先する！
+          # パスを TWRP 7.1 の正解（build/target/）に修正したぞ！
           cat <<EOF > omni_ep171en.mk
-          \$(call inherit-product, build/make/target/product/embedded.mk)
+          \$(call inherit-product, build/target/product/embedded.mk)
           \$(call inherit-product, vendor/omni/config/common.mk)
           PRODUCT_DEVICE := ep171en
           PRODUCT_NAME := omni_ep171en
@@ -61,24 +18,4 @@ jobs:
           PRODUCT_MANUFACTURER := everyphone
           EOF
 
-          # 4. Pythonの古いコードを修正（三度目の正直だ！）
           sed -i 's/except IOError, ES.ParseError:/except (IOError, ES.ParseError):/g' ~/twrp/build/tools/roomservice.py
-          
-          # 配置確認ログ
-          echo "--- Final Device Tree Structure ---"
-          ls -R .
-
-      - name: Build TWRP
-        run: |
-          cd ~/twrp
-          export ALLOW_MISSING_DEPENDENCIES=true
-          export LC_ALL=C
-          # 外部検索を完全に遮断！
-          export SKIP_ROOMSERVICE=true
-          /bin/bash -c "source build/envsetup.sh && lunch omni_ep171en-eng && make recoveryimage -j$(nproc)"
-
-      - name: Upload Recovery Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: TWRP-Recovery-EP171EN
-          path: /home/runner/twrp/out/target/product/ep171en/recovery.img
