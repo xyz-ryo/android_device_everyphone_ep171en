@@ -3,6 +3,9 @@ name: Build TWRP for EveryPhone EP-171EN
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -34,7 +37,8 @@ jobs:
       - name: Add Device Tree
         run: |
           mkdir -p ~/twrp/device/everyphone/ep171en
-          cp -r $GITHUB_WORKSPACE/* ~/twrp/device/everyphone/ep171en/
+          # リポジトリ内の正しいフォルダの中身だけをコピーするぞ！
+          cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
 
       - name: Build TWRP
         run: |
