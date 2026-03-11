@@ -16,7 +16,9 @@ jobs:
       - name: Set up Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python2
+          # Python 2をデフォルトに設定して古いスクリプトを動かすぞ
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
       - name: Install Repo Tool
         run: |
@@ -34,27 +36,28 @@ jobs:
           repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
           repo sync -c -j$(nproc) --no-tags --no-clone-bundle
 
-      - name: Force Add Device Tree
+      - name: Fix Source and Add Device Tree
         run: |
-          # フォルダ構造を根こそぎ正しく再配置するぞ、ワラケル！
+          # 1. Pythonの古いコードを自動で修正する「ターボ・パッチ」だ！
+          sed -i 's/except IOError, ES.ParseError:/except (IOError, ES.ParseError):/g' ~/twrp/build/tools/roomservice.py
+          
+          # 2. デバイスツリーの配置
           rm -rf ~/twrp/device/everyphone/ep171en
           mkdir -p ~/twrp/device/everyphone/ep171en
           cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
           
-          # 【重要】もしファイル名が間違っていても、ここで強制的にリネームする！
+          # 3. ファイル名が間違っていても強制リネーム
           cd ~/twrp/device/everyphone/ep171en
-          if [ -f ep171en.mk ] && [ ! -f omni_ep171en.mk ]; then mv ep171en.mk omni_ep171en.mk; fi
-          
-          # 配置をログに出して最終確認だ
-          ls -R ~/twrp/device/everyphone/ep171en
+          [ -f ep171en.mk ] && mv ep171en.mk omni_ep171en.mk || true
 
       - name: Build TWRP
         run: |
           cd ~/twrp
           export ALLOW_MISSING_DEPENDENCIES=true
-          # ターゲットを強制的に叩き込む
+          # 2026年のビルド環境で古いソースを動かすための呪文だ
+          export LC_ALL=C
           source build/envsetup.sh
-          lunch omni_ep171en-eng || (echo "FAILED TO LUNCH" && exit 1)
+          lunch omni_ep171en-eng
           make recoveryimage -j$(nproc)
 
       - name: Upload Recovery Image
