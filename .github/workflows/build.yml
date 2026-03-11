@@ -16,9 +16,8 @@ jobs:
       - name: Set up Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python2
-          # Python 2をデフォルトに設定して古いスクリプトを動かすぞ
-          sudo ln -sf /usr/bin/python2 /usr/bin/python
+          # python2は除外した！ python3-is-python2 を代わりに試みる
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 python3-is-python3
 
       - name: Install Repo Tool
         run: |
@@ -38,15 +37,16 @@ jobs:
 
       - name: Fix Source and Add Device Tree
         run: |
-          # 1. Pythonの古いコードを自動で修正する「ターボ・パッチ」だ！
+          # Python 3でエラーになる古い書き方を、強引に置換して修正する！
           sed -i 's/except IOError, ES.ParseError:/except (IOError, ES.ParseError):/g' ~/twrp/build/tools/roomservice.py
+          sed -i 's/print "    Checking"/print("    Checking")/g' ~/twrp/build/tools/roomservice.py
           
-          # 2. デバイスツリーの配置
+          # デバイスツリーの配置
           rm -rf ~/twrp/device/everyphone/ep171en
           mkdir -p ~/twrp/device/everyphone/ep171en
           cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
           
-          # 3. ファイル名が間違っていても強制リネーム
+          # 自動リネーム
           cd ~/twrp/device/everyphone/ep171en
           [ -f ep171en.mk ] && mv ep171en.mk omni_ep171en.mk || true
 
@@ -54,8 +54,8 @@ jobs:
         run: |
           cd ~/twrp
           export ALLOW_MISSING_DEPENDENCIES=true
-          # 2026年のビルド環境で古いソースを動かすための呪文だ
           export LC_ALL=C
+          # Python 3でも動くように祈りつつ実行だ
           source build/envsetup.sh
           lunch omni_ep171en-eng
           make recoveryimage -j$(nproc)
