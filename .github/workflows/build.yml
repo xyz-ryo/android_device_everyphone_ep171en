@@ -8,7 +8,8 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # ここが肝心だ！ 24.04 ではなく 20.04 を使うぞ
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,8 +17,10 @@ jobs:
       - name: Set up Environment
         run: |
           sudo apt-get update
-          # python2は除外した！ python3-is-python2 を代わりに試みる
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python3 python3-is-python3
+          # Ubuntu 20.04 用の標準的なビルドパックだ
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git wget python2 python3
+          # python と打てば python2 が動くように設定する
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
       - name: Install Repo Tool
         run: |
@@ -35,27 +38,22 @@ jobs:
           repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
           repo sync -c -j$(nproc) --no-tags --no-clone-bundle
 
-      - name: Fix Source and Add Device Tree
+      - name: Add Device Tree
         run: |
-          # Python 3でエラーになる古い書き方を、強引に置換して修正する！
-          sed -i 's/except IOError, ES.ParseError:/except (IOError, ES.ParseError):/g' ~/twrp/build/tools/roomservice.py
-          sed -i 's/print "    Checking"/print("    Checking")/g' ~/twrp/build/tools/roomservice.py
-          
-          # デバイスツリーの配置
           rm -rf ~/twrp/device/everyphone/ep171en
           mkdir -p ~/twrp/device/everyphone/ep171en
           cp -rv $GITHUB_WORKSPACE/device/everyphone/ep171en/* ~/twrp/device/everyphone/ep171en/
           
-          # 自動リネーム
+          # ファイル名の自動修正
           cd ~/twrp/device/everyphone/ep171en
-          [ -f ep171en.mk ] && mv ep171en.mk omni_ep171en.mk || true
+          if [ -f ep171en.mk ] && [ ! -f omni_ep171en.mk ]; then mv ep171en.mk omni_ep171en.mk; fi
+          ls -R ~/twrp/device/everyphone/ep171en
 
       - name: Build TWRP
         run: |
           cd ~/twrp
           export ALLOW_MISSING_DEPENDENCIES=true
           export LC_ALL=C
-          # Python 3でも動くように祈りつつ実行だ
           source build/envsetup.sh
           lunch omni_ep171en-eng
           make recoveryimage -j$(nproc)
